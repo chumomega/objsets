@@ -1,6 +1,10 @@
 package objsets
 
 import TweetReader._
+import com.sun.source.tree.TryTree
+import sun.invoke.empty.Empty
+
+import java.util.NoSuchElementException
 
 /**
  * A class to represent tweets.
@@ -65,7 +69,7 @@ abstract class TweetSet extends TweetSetInterface {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-  def mostRetweeted: Tweet = ???
+  def mostRetweeted: Tweet
 
   /**
    * Returns a list containing all tweets of this set, sorted by retweet count
@@ -76,7 +80,7 @@ abstract class TweetSet extends TweetSetInterface {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-  def descendingByRetweet: TweetList = ???
+  def descendingByRetweet: TweetList
 
   /**
    * The following methods are already implemented
@@ -104,6 +108,8 @@ abstract class TweetSet extends TweetSetInterface {
    * This method takes a function and applies it to every element in the set.
    */
   def foreach(f: Tweet => Unit): Unit
+
+  def isEmpty: Boolean
 }
 
 class Empty extends TweetSet {
@@ -122,6 +128,12 @@ class Empty extends TweetSet {
   def foreach(f: Tweet => Unit): Unit = ()
 
   def union(that: TweetSet): TweetSet = that
+
+  override def mostRetweeted : Nothing = throw new NoSuchElementException
+
+  override def descendingByRetweet: TweetList = Nil
+
+  override def isEmpty: Boolean = true
 }
 
 class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
@@ -130,6 +142,7 @@ class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
     if (p(elem))
       left.filterAcc(p, right.filterAcc(p, acc.incl(elem)))
     else left.filterAcc(p, right.filterAcc(p, acc))
+
   /**
    * The following methods are already implemented
    */
@@ -156,13 +169,24 @@ class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
     right.foreach(f)
   }
 
-  def union(that: TweetSet): TweetSet = {
-    left.union(that)
-    right.union(that)
-    that.incl(elem)
-  }
-}
+  override def isEmpty: Boolean = false
 
+  def union(that: TweetSet): TweetSet = {
+    right.union(left.union(that)).incl(elem)
+  }
+
+  def mostRetweeted: Tweet = {
+    lazy val left_most = left.mostRetweeted
+    lazy val right_most = right.mostRetweeted
+
+    if (!left.isEmpty && left_most.retweets > elem.retweets) {
+      if (!right.isEmpty && right_most.retweets > left_most.retweets) right_most else left_most
+    } else if (!right.isEmpty && right_most.retweets > elem.retweets) right_most
+    else elem
+  }
+
+  override def descendingByRetweet: TweetList = new Cons(this.mostRetweeted, this.remove(this.mostRetweeted).descendingByRetweet)
+}
 trait TweetList {
   def head: Tweet
   def tail: TweetList
